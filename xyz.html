@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Recorder</title>
+</head>
+<body>
+    <h1>Audio Recorder</h1>
+    <button id="startRecording">Start Recording</button>
+    <div id="transcriptionContainer"></div>
+
+    <script>
+        const startRecordingButton = document.getElementById('startRecording');
+        const transcriptionContainer = document.getElementById('transcriptionContainer');
+        let mediaRecorder;
+        const chunkDuration = 2000; // Duration of each audio chunk in milliseconds
+        let intervalId; // To store the interval ID for stopping
+    
+        startRecordingButton.addEventListener('click', async () => {
+            try {
+                startRecordingButton.disabled = true;
+    
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+    
+                mediaRecorder.ondataavailable = e => {
+                    const blob = e.data;
+                    const reader = new FileReader();
+                    reader.onload = async () => {
+                        const base64data = reader.result.split(',')[1];
+    
+                        try {
+                            const response = await fetch('/transcribe', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({ audio_chunk: base64data }),
+                            });
+    
+                            if (!response.ok) {
+                                throw new Error(`HTTP error! Status: ${response.status}`);
+                            }
+    
+                            const data = await response.json();
+                            transcriptionContainer.innerHTML += `<p>${data.transcript}</p>`;
+                        } catch (error) {
+                            console.error('Error transcribing audio:', error);
+                            transcriptionContainer.innerHTML += `<p>Error transcribing audio</p>`;
+                        }
+                    };
+                    reader.readAsDataURL(blob);
+                };
+    
+                mediaRecorder.start();
+    
+                // Set interval to stop and start recording every chunkDuration milliseconds
+                intervalId = setInterval(() => {
+                    mediaRecorder.stop();
+                    mediaRecorder.start();
+                }, chunkDuration);
+    
+            } catch (error) {
+                console.error('Error accessing microphone:', error);
+            }
+        });
+    
+        // Stop recording when the window or tab is closed
+        window.addEventListener('beforeunload', () => {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+            }
+            clearInterval(intervalId); // Clear interval if page is closed
+        });
+    </script>
+    
+    
+    
+    
+    
+    
+    
+</body>
+</html>
